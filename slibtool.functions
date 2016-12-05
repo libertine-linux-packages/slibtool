@@ -1,0 +1,164 @@
+# This file is part of libertine linux's package slibtool. It is subject to the license terms in the COPYRIGHT file found in the top-level directory of this distribution and at https://raw.githubusercontent.com/libertine-linux-packages/slibtool/master/COPYRIGHT. No part of libertine linux's package slibtool, including this file, may be copied, modified, propagated, or distributed except according to the terms contained in the COPYRIGHT file.
+# Copyright © 2016 The developers of libertine linux's package slibtool. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/libertine-linux-packages/slibtool/master/COPYRIGHT.
+
+
+variant=upstream
+
+
+case "$package" in
+	
+	build_slibtool)
+		
+		build_provides slibtool slibtool-static slibtool-shared
+		build_provides clibtool clibtool-static clibtool-shared
+		build_provides dlibtool dlibtool-static dlibtool-shared
+		build_provides libtool libtoolize glibtoolize
+				
+		build_needs cc
+		libertine_compile_build_slibtool()
+		{
+			_libertine_compile_slibtool_internal "$(libertine_public_outputBuildSysrootPath)" "$(libertine_public_outputBuildSysrootPath)" false '' cc
+		}
+		
+	;;
+	
+	slibtool)
+		
+		depends busybox
+		
+		depends build_musl_cross_make_build
+		build_needs "$libertine_build"-cc "$libertine_build"-"$libertine_cCompilerName"
+	
+		depends build_musl_cross_make_host
+		build_needs "$libertine_host"-cc "$libertine_host"-"$libertine_cCompilerName" "$libertine_host"-strip "$libertine_host"-ar
+		libertine_compile_slibtool()
+		{
+			_libertine_compile_slibtool_internal "$(libertine_public_outputInitramfsPath)" '' true "$libertine_host"-strip "$libertine_host"-cc
+		}
+		
+	;;
+	
+esac
+
+depends build_gnuconfig
+
+depends build_libtool
+
+depends build_automake
+		
+depends build_gnumake
+build_needs make
+
+depends build_ccache
+build_needs ccache
+
+depends build_busybox
+build_needs sh env dirname uname tr awk sed make rm mkdir touch # sofort build system needs
+build_needs realpath # libtoolize and libtool need this when used as build_needs in downstream projects
+
+build_needs mkdir sed cp ln
+_libertine_compile_slibtool_internal()
+{
+	local outputFolderPath="$1"
+	local installedRootFolderPath="$2"
+	local isCrossCompile="$3"
+	
+	local outputBinFolderPath="$outputFolderPath"/usr/bin
+	mkdir -m 0755 -p "$outputBinFolderPath"
+	
+	if $isCrossCompile; then
+		local envPath='/usr/bin/env'
+		local nativeCompiler="${libertine_build}"-"${libertine_cCompilerName}"
+		local crossCompiler="${libertine_host}"-"${libertine_cCompilerName}"
+		local nativeCc="$nativeCompiler"
+		local cc="$crossCompiler"
+	else
+		local envPath="$(libertine_public_PATH)"/env
+		local nativeCompiler=cc
+		local crossCompiler=cc
+		local nativeCc="$nativeCompiler"
+		local cc="$crossCompiler"
+	fi
+	
+	pushd "$(libertine_public_sourcePath)"
+	
+		set -- \
+			--prefix=/usr \
+			--exec-prefix=/usr \
+			--bindir=/usr/bin \
+			--libdir=/usr/lib \
+			--includedir=/usr/include \
+			--mandir=/usr/share/man \
+			--libexecdir=/usr/libexec \
+			--avoid-version \
+			--ldstrict \
+			--shell=sh \
+			--enable-shared
+		
+		if $isCrossCompile; then
+			set -- "$@" \
+				--build="$libertine_build" \
+				--host="$libertine_host" \
+				--target="$libertine_host" \
+				--compiler="$nativeCc" \
+				--cross-compile="${libertine_host}"- \
+				--toolchain=binutils \
+				--sysroot="$(libertine_public_inputSysrootPath)" \
+				--all-static \
+				--enable-static \
+				--disable-shared
+			local cFlags=""
+		else
+			set -- "$@" \
+				--build=native \
+				--host=native \
+				--target=native
+			local cFlags="$(libertine_public_hostCCompilerFlags)"
+		fi
+		
+		libertine_public_adjustShaBang configure
+		
+		# (1) Remove hardcoded path to shell
+		# (2) Remove use of basename; only needed when running under Windows
+		sed -i \
+			-e 's;#!/bin/sh;#!'"$envPath"' sh;g' \
+			-e 's,"if \[ `basename \\"\$0\\"` = \\"%s\\" \]; then\\n","if false \\"%s\\"; then\\n",g' \
+			src/logic/slbt_exec_link.c
+		
+		# This is NOT an autoconf configure
+		CFLAGS_CMDLINE="$cFlags" NATIVE_CC="$nativeCc" CC="$cc" ./configure "$@"
+		
+		libertine_public_make
+		
+	popd
+	
+	libertine_public_copy "$(libertine_public_packagePath)"/filesystem/. "$outputFolderPath"/
+	
+	local macrosFolderPath="$outputFolderPath"/usr/share/libtoolize/AC_CONFIG_MACRO_DIRS
+	libertine_public_copy "$(libertine_public_outputMiscPath build_libtool)"/macros/. "$macrosFolderPath"
+	
+	local automakeBinariesFolderPath="$outputFolderPath"/usr/share/libtoolize/AC_CONFIG_AUX_DIR
+	libertine_public_autoconf_replaceWithKnownVersionOfConfigSub "$automakeBinariesFolderPath"
+	libertine_public_autoconf_replaceWithKnownVersionOfConfigGuess "$automakeBinariesFolderPath"
+	libertine_public_autoconf_replaceWithKnownVersionOfLtmainSh "$automakeBinariesFolderPath"  # Note, we do not use libtool's ltmain.in
+	libertine_public_autoconf_replaceWithKnownVersionOfCompile "$automakeBinariesFolderPath"
+	libertine_public_autoconf_replaceWithKnownVersionOfDepcomp "$automakeBinariesFolderPath"
+	libertine_public_autoconf_replaceWithKnownVersionOfInstallSh "$automakeBinariesFolderPath"
+	libertine_public_autoconf_replaceWithKnownVersionOfMissing "$automakeBinariesFolderPath"
+	
+	
+	pushd "$outputBinFolderPath"
+	
+		# Do the work of make install
+		cp "$(libertine_public_sourcePath)"/bin/slibtool "$outputBinFolderPath"
+		ln -s slibtool slibtool-static
+		ln -s slibtool slibtool-shared
+		ln -s slibtool clibtool
+		ln -s slibtool clibtool-static
+		ln -s slibtool clibtool-shared
+		ln -s slibtool dlibtool
+		ln -s slibtool dlibtool-static
+		ln -s slibtool dlibtool-shared
+		
+	popd
+}
