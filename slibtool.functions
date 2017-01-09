@@ -73,7 +73,7 @@ _libertine_compile_slibtool_internal()
 		local nativeCc="$nativeCompiler"
 		local cc="$crossCompiler"
 	else
-		local envPath="$(libertine_public_PATH)"/env
+		local envPath="$(libertine_public_buildNeedsPath)"/env
 		local nativeCompiler=cc
 		local crossCompiler=cc
 		local nativeCc="$nativeCompiler"
@@ -81,7 +81,7 @@ _libertine_compile_slibtool_internal()
 	fi
 	
 	pushd "$(libertine_public_sourcePath)"
-	
+				
 		set -- \
 			--prefix=/usr \
 			--exec-prefix=/usr \
@@ -118,12 +118,21 @@ _libertine_compile_slibtool_internal()
 		
 		libertine_public_adjustShaBang configure
 		
-		# (1) Remove hardcoded path to shell
-		# (2) Remove use of basename; only needed when running under Windows
+		# Remove hardcoded path to shell
+		#	-e 's,"if \[ `basename \\"\$0\\"` = \\"%s\\" \]; then\\n","if false \\"%s\\"; then\\n",g' \
 		sed -i \
 			-e 's;#!/bin/sh;#!'"$envPath"' sh;g' \
-			-e 's,"if \[ `basename \\"\$0\\"` = \\"%s\\" \]; then\\n","if false \\"%s\\"; then\\n",g' \
 			src/logic/slbt_exec_link.c
+		
+		# Remove hardcoded rpaths except for /usr/lib
+		# Also sprintf(buf,"/usr/%s/lib",cctx->host.host); and others which AREN'T replaced
+		sed -i \
+			-e '/"\/lib"/d' \
+			-e '/"\/lib\/64"/d' \
+			-e '/"\/usr\/lib64"/d' \
+			-e '/"\/usr\/local\/lib"/d' \
+			-e '/"\/usr\/local\/lib64"/d' \
+			src/driver/slbt_driver_ctx.c
 		
 		# This is NOT an autoconf configure
 		CFLAGS_CMDLINE="$cFlags" NATIVE_CC="$nativeCc" CC="$cc" ./configure "$@"
