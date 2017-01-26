@@ -17,7 +17,7 @@ case "$package" in
 		build_needs cc
 		libertine_compile_build_slibtool()
 		{
-			_libertine_compile_slibtool_internal "$(libertine_public_outputBuildSysrootPath)" "$(libertine_public_outputBuildSysrootPath)" false '' cc
+			_libertine_compile_slibtool_internal "$(libertine_public_outputBuildSysrootPath)" "$(libertine_public_outputBuildSysrootPath)" false
 		}
 		
 	;;
@@ -33,7 +33,7 @@ case "$package" in
 		build_needs "$libertine_host"-cc "$libertine_host"-"$libertine_cCompilerName" "$libertine_host"-strip "$libertine_host"-ar
 		libertine_compile_slibtool()
 		{
-			_libertine_compile_slibtool_internal "$(libertine_public_outputInitramfsPath)" '' true "$libertine_host"-strip "$libertine_host"-cc
+			_libertine_compile_slibtool_internal "$(libertine_public_outputInitramfsPath)" '' true
 		}
 		
 	;;
@@ -160,6 +160,11 @@ _libertine_compile_slibtool_internal()
 	
 		# Do the work of make install
 		cp "$(libertine_public_sourcePath)"/bin/slibtool "$outputBinFolderPath"
+		
+		if $isCrossCompile; then
+			libertine_public_stripAndSecureBinary slibtool
+		fi
+		
 		ln -s slibtool slibtool-static
 		ln -s slibtool slibtool-shared
 		ln -s slibtool clibtool
