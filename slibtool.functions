@@ -31,6 +31,10 @@ case "$package" in
 	
 		depends build_musl_cross_make_host
 		build_needs "$libertine_host"-cc "$libertine_host"-"$libertine_cCompilerName" "$libertine_host"-strip "$libertine_host"-ar
+
+		depends build_paxctl
+		build_needs paxctl
+		
 		libertine_compile_slibtool()
 		{
 			_libertine_compile_slibtool_internal "$(libertine_public_outputInitramfsPath)" '' true
