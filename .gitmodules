@@ -2,4 +2,3 @@
 	path = upstream
 	url = https://github.com/libertine-linux-clones/slibtool.git
 	branch = master
-	libertine-linux-upstream = https://github.com/midipix-project/slibtool.git
